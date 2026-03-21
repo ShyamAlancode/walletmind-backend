@@ -148,7 +148,8 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
     """Log an analysis or action to Hedera Consensus Service — creates a permanent, tamper-proof on-chain record."""
     try:
         import hiero_sdk_python as h
-        client = h.Client(network="testnet")
+        from hiero_sdk_python.client.network import Network
+        client = h.Client(network=Network.TESTNET)
         client.set_operator(
             h.AccountId.from_string(HEDERA_ACCOUNT_ID),
             h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
@@ -185,7 +186,8 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
     """Create a real Hedera Scheduled Transaction as on-chain proof of a recommended strategy execution intent."""
     try:
         import hiero_sdk_python as h
-        client = h.Client(network="testnet")
+        from hiero_sdk_python.client.network import Network
+        client = h.Client(network=Network.TESTNET)
         op_id = h.AccountId.from_string(HEDERA_ACCOUNT_ID)
         client.set_operator(op_id, h.PrivateKey.from_string(HEDERA_PRIVATE_KEY))
         transfer = (
@@ -307,12 +309,12 @@ async def health():
 async def debug_hiero():
     try:
         import hiero_sdk_python as h
-        import inspect
-        sig = str(inspect.signature(h.Client.__init__))
+        from hiero_sdk_python.client.network import Network
+        client = h.Client(network=Network.TESTNET)
         return {
             "status": "OK",
-            "client_init_signature": sig,
-            "client_methods": [x for x in dir(h.Client) if not x.startswith("_")]
+            "client_created": True,
+            "network_attrs": [x for x in dir(Network) if not x.startswith("_")]
         }
     except Exception as e:
         return {"status": "FAILED", "error": str(e)}
