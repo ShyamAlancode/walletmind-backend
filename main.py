@@ -150,10 +150,11 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
         import hiero_sdk_python as h
         from hiero_sdk_python.client.network import Network
         client = h.Client(network=Network(network="testnet"))
-        client.set_operator(
-            h.AccountId.from_string(HEDERA_ACCOUNT_ID),
-            h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
-        )
+        try:
+            pk = h.PrivateKey.from_string_ecdsa(HEDERA_PRIVATE_KEY)
+        except Exception:
+            pk = h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
+        client.set_operator(h.AccountId.from_string(HEDERA_ACCOUNT_ID), pk)
         payload = json.dumps({
             "service": "WalletMind", "version": "2.0.0",
             "wallet": wallet_address, "action": action,
@@ -189,11 +190,16 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
         from hiero_sdk_python.client.network import Network
         client = h.Client(network=Network(network="testnet"))
         op_id = h.AccountId.from_string(HEDERA_ACCOUNT_ID)
-        client.set_operator(op_id, h.PrivateKey.from_string(HEDERA_PRIVATE_KEY))
+        try:
+            pk = h.PrivateKey.from_string_ecdsa(HEDERA_PRIVATE_KEY)
+        except Exception:
+            pk = h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
+        client.set_operator(op_id, pk)
+        # Use integer tinybars: 1,000,000 tinybars = 0.01 HBAR
         transfer = (
             h.TransferTransaction()
-            .add_hbar_transfer(op_id, h.Hbar(-0.01))
-            .add_hbar_transfer(op_id, h.Hbar(0.01))
+            .add_hbar_transfer(op_id, -1000000)
+            .add_hbar_transfer(op_id, 1000000)
         )
         sched_resp = (
             h.ScheduleCreateTransaction()
