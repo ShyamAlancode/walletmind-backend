@@ -310,12 +310,8 @@ async def debug_hiero():
     try:
         import hiero_sdk_python as h
         from hiero_sdk_python.client.network import Network
-        client = h.Client(network=Network.TESTNET)
-        return {
-            "status": "OK",
-            "client_created": True,
-            "network_attrs": [x for x in dir(Network) if not x.startswith("_")]
-        }
+        network_attrs = [x for x in dir(Network) if not x.startswith("_")]
+        return {"status": "OK", "network_attrs": network_attrs}
     except Exception as e:
         return {"status": "FAILED", "error": str(e)}
 
