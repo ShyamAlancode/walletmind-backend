@@ -274,7 +274,9 @@ async def health():
 async def debug_hiero():
     try:
         import hiero_sdk_python as h
-        return {"status": "OK", "available": [x for x in dir(h) if not x.startswith("_")][:30]}
+        all_items = [x for x in dir(h) if not x.startswith("_")]
+        topic_items = [x for x in all_items if "topic" in x.lower() or "schedule" in x.lower() or "submit" in x.lower()]
+        return {"status": "OK", "topic_schedule_items": topic_items, "total_items": len(all_items)}
     except Exception as e:
         return {"status": "FAILED", "error": str(e)}
 
