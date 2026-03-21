@@ -161,14 +161,13 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
             "summary": summary[:200],
             "timestamp": datetime.utcnow().isoformat(),
         })
-        resp = (
+        receipt = (
             h.TopicMessageSubmitTransaction()
             .set_topic_id(h.TopicId.from_string(HCS_TOPIC_ID))
             .set_message(payload)
             .execute(client)
         )
-        receipt = resp.get_receipt(client)
-        tx_id = str(resp.transaction_id)
+        tx_id = str(receipt.transaction_id)
         _stats["hcs_messages_logged"] += 1
         logger.info(f"HCS logged: {tx_id}")
         return json.dumps({
@@ -201,13 +200,12 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
             .add_hbar_transfer(op_id, -1000000)
             .add_hbar_transfer(op_id, 1000000)
         )
-        sched_resp = (
+        receipt = (
             h.ScheduleCreateTransaction()
             .set_scheduled_transaction(transfer)
             .set_schedule_memo(f"WalletMind: {strategy_memo[:60]}")
             .execute(client)
         )
-        receipt = sched_resp.get_receipt(client)
         schedule_id = str(receipt.schedule_id)
         _stats["scheduled_transactions"] += 1
         logger.info(f"Scheduled tx: {schedule_id}")
