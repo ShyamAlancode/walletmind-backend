@@ -10,3 +10,4 @@ langchain-core>=1.2.0
 hedera-agent-kit>=3.2.0
 hiero-sdk-python>=0.1.9
 aiohttp>=3.13.0
+hiero-sdk-python==0.1.9
