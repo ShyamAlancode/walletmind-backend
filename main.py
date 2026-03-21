@@ -310,8 +310,20 @@ async def debug_hiero():
     try:
         import hiero_sdk_python as h
         from hiero_sdk_python.client.network import Network
-        network_attrs = [x for x in dir(Network) if not x.startswith("_")]
-        return {"status": "OK", "network_attrs": network_attrs}
+        # Try creating testnet network
+        net = Network()
+        client = h.Client(network=net)
+        client.set_operator(
+            h.AccountId.from_string(HEDERA_ACCOUNT_ID),
+            h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
+        )
+        return {
+            "status": "OK",
+            "network_init_sig": str(__import__('inspect').signature(Network.__init__)),
+            "network_default_nodes": str(Network.DEFAULT_NODES)[:200],
+            "network_ledger_id": str(Network.LEDGER_ID),
+            "client_created": True
+        }
     except Exception as e:
         return {"status": "FAILED", "error": str(e)}
 
