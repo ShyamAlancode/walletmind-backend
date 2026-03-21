@@ -311,9 +311,8 @@ async def health():
 async def debug_hiero():
     try:
         import hiero_sdk_python as h
-        all_items = [x for x in dir(h) if not x.startswith("_")]
-        topic_items = [x for x in all_items if any(k in x.lower() for k in ["topic", "schedule", "submit"])]
-        return {"status": "OK", "topic_schedule_items": topic_items, "total_items": len(all_items)}
+        client_methods = [x for x in dir(h.Client) if not x.startswith("_")]
+        return {"status": "OK", "client_methods": client_methods}
     except Exception as e:
         return {"status": "FAILED", "error": str(e)}
 
