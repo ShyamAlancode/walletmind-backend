@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, "/app/.venv/lib/python3.11/site-packages")
 import os, json, logging, asyncio, re, requests as req
 from datetime import datetime
 from typing import Optional
@@ -267,6 +269,22 @@ async def health():
         "hcs_topic": HCS_TOPIC_ID
     }
 
+
+@app.get("/debug-hiero")
+async def debug_hiero():
+    import importlib, os, sys
+    result = {}
+    for name in ["hiero", "hedera", "hiero_sdk", "hashgraph"]:
+        try:
+            mod = importlib.import_module(name)
+            result[f"import_{name}"] = "SUCCESS: " + str([x for x in dir(mod) if not x.startswith("_")][:15])
+        except Exception as e:
+            result[f"import_{name}"] = f"FAILED: {e}"
+    venv = "/app/.venv/lib/python3.11/site-packages"
+    if os.path.exists(venv):
+        result["hedera_dirs"] = [d for d in os.listdir(venv) if any(x in d.lower() for x in ["hiero","hedera","hashgraph"])]
+    result["sys_path"] = sys.path[:5]
+    return result
 
 @app.get("/stats")
 async def get_stats():
