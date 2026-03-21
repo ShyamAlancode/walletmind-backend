@@ -17,8 +17,52 @@ FRONTEND_DIR = os.getenv("FRONTEND_DIR", r"D:\hederamind-frontend")
 
 
 async def log_to_hcs(payload: dict) -> Optional[str]:
+    # Try native hiero SDK first
+    try:
+        import hiero
+    except ImportError:
+        try:
+            import hiero_sdk as hiero
+        except ImportError:
+            logger.warning("hiero SDK not available - using Node.js fallback")
+            return await _node_fallback(payload)
+            
+    # Native Python SDK Implementation
     if not HEDERA_ACCOUNT_ID or not HEDERA_PRIVATE_KEY:
         logger.warning("Hedera credentials not set — skipping HCS log")
+        return None
+
+    try:
+        from hiero import Client, AccountId, PrivateKey, TopicId, TopicMessageSubmitTransaction
+        client = Client.for_testnet()
+        pk = PrivateKey.from_string(HEDERA_PRIVATE_KEY.replace("0x", ""))
+        client.set_operator(AccountId.from_string(HEDERA_ACCOUNT_ID), pk)
+        topic_id_str = os.getenv("HCS_TOPIC_ID", "")
+        if not topic_id_str:
+            from hiero import TopicCreateTransaction
+            tx = TopicCreateTransaction().set_topic_memo("WalletMind AI Agent — Hedera Apex Hackathon 2026").execute(client)
+            receipt = tx.get_receipt(client)
+            os.environ["HCS_TOPIC_ID"] = str(receipt.topic_id)
+            topic_id_str = str(receipt.topic_id)
+
+        topic_id = TopicId.from_string(topic_id_str)
+        message_str = json.dumps(payload)
+        
+        tx = TopicMessageSubmitTransaction(
+            topic_id=topic_id,
+            message=message_str[:500]
+        ).execute(client)
+        tx.get_receipt(client)
+        tx_id = str(tx.transaction_id)
+        logger.info(f"HCS logged natively: {tx_id}")
+        return tx_id
+    except Exception as e:
+        logger.error(f"Native HCS failed: {e}. Falling back to node.")
+        return await _node_fallback(payload)
+
+async def _node_fallback(payload: dict) -> Optional[str]:
+    if not HEDERA_ACCOUNT_ID or not HEDERA_PRIVATE_KEY:
+        logger.warning("Hedera credentials not set — skipping Node HCS log")
         return None
 
     try:
