@@ -1,4 +1,4 @@
-import os, json, logging, asyncio, re
+import os, json, logging, asyncio, re, requests as req
 from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
@@ -31,64 +31,76 @@ HCS_TOPIC_ID       = os.getenv("HCS_TOPIC_ID", "0.0.8315989")
 MIRROR             = "https://testnet.mirrornode.hedera.com"
 
 app = FastAPI(title="WalletMind API", version="2.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-                   allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ---------- HEDERA CLIENT HELPER ----------
-def _hedera_client():
-    from hiero import Client, AccountId, PrivateKey
-    c = Client.for_testnet()
-    c.set_operator(AccountId.from_string(HEDERA_ACCOUNT_ID),
-                   PrivateKey.from_string(HEDERA_PRIVATE_KEY))
-    return c
-
-# ---------- LANGCHAIN TOOLS ----------
+# ---------- TOOLS ----------
 
 @tool
 def fetch_wallet_info(wallet_address: str) -> str:
     """Fetch real wallet data from Hedera Mirror Node: HBAR balance, token holdings, recent transactions."""
-    async def _go():
-        async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.get(f"{MIRROR}/api/v1/accounts/{wallet_address}")
-            if r.status_code == 404:
-                return {"error": f"Wallet {wallet_address} not found on Hedera testnet"}
-            acct = r.json()
-            hbar = acct.get("balance", {}).get("balance", 0) / 1e8
-            tr = await c.get(f"{MIRROR}/api/v1/accounts/{wallet_address}/tokens",
-                             params={"limit": 10})
-            tokens = []
-            for t in tr.json().get("tokens", []):
-                ti = await c.get(f"{MIRROR}/api/v1/tokens/{t['token_id']}")
-                td = ti.json()
-                dec = int(td.get("decimals", 0))
-                bal = t["balance"] / (10 ** dec) if dec else t["balance"]
-                tokens.append({"token_id": t["token_id"],
-                                "symbol": td.get("symbol", "?"),
-                                "balance": round(bal, 4)})
-            txr = await c.get(f"{MIRROR}/api/v1/transactions",
-                              params={"account.id": wallet_address,
-                                      "limit": 5, "order": "desc"})
-            txs = [{"id": x["transaction_id"], "type": x["name"], "result": x["result"]}
-                   for x in txr.json().get("transactions", [])]
-            return {"wallet": wallet_address,
-                    "hbar_balance": round(hbar, 4),
-                    "tokens": tokens,
-                    "recent_transactions": txs,
-                    "evm_address": acct.get("evm_address", "")}
-    return json.dumps(asyncio.run(_go()))
+    try:
+        r = req.get(f"{MIRROR}/api/v1/accounts/{wallet_address}", timeout=15)
+        if r.status_code == 404:
+            return json.dumps({"error": f"Wallet {wallet_address} not found on Hedera testnet"})
+        acct = r.json()
+        hbar = acct.get("balance", {}).get("balance", 0) / 1e8
+        tr = req.get(f"{MIRROR}/api/v1/accounts/{wallet_address}/tokens", params={"limit": 10}, timeout=10)
+        tokens = []
+        for t in tr.json().get("tokens", []):
+            ti = req.get(f"{MIRROR}/api/v1/tokens/{t['token_id']}", timeout=5)
+            td = ti.json()
+            dec = int(td.get("decimals", 0))
+            bal = t["balance"] / (10 ** dec) if dec else t["balance"]
+            tokens.append({
+                "token_id": t["token_id"],
+                "symbol": td.get("symbol", "?"),
+                "balance": round(bal, 4)
+            })
+        txr = req.get(
+            f"{MIRROR}/api/v1/transactions",
+            params={"account.id": wallet_address, "limit": 5, "order": "desc"},
+            timeout=10
+        )
+        txs = [
+            {"id": x["transaction_id"], "type": x["name"], "result": x["result"]}
+            for x in txr.json().get("transactions", [])
+        ]
+        return json.dumps({
+            "wallet": wallet_address,
+            "hbar_balance": round(hbar, 4),
+            "tokens": tokens,
+            "recent_transactions": txs,
+            "evm_address": acct.get("evm_address", "")
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 @tool
 def get_hbar_price() -> str:
     """Get current HBAR/USD price from Hedera Mirror Node Exchange Rate API."""
-    async def _go():
-        async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(f"{MIRROR}/api/v1/network/exchangerate")
-            rate = r.json().get("current_rate", {})
-            cents = rate.get("cent_equivalent", 0) / max(rate.get("hbar_equivalent", 1), 1)
-            return {"hbar_price_usd": round(cents / 100, 6),
-                    "source": "Hedera Mirror Node Exchange Rate API"}
-    return json.dumps(asyncio.run(_go()))
+    try:
+        r = req.get(f"{MIRROR}/api/v1/network/exchangerate", timeout=10)
+        rate = r.json().get("current_rate", {})
+        cents = rate.get("cent_equivalent", 0) / max(rate.get("hbar_equivalent", 1), 1)
+        price = round(cents / 100, 6)
+        if price <= 0:
+            raise ValueError("Zero price returned")
+        return json.dumps({
+            "hbar_price_usd": price,
+            "source": "Hedera Mirror Node Exchange Rate API"
+        })
+    except Exception as e:
+        return json.dumps({
+            "hbar_price_usd": 0.092,
+            "source": "fallback_estimate",
+            "note": f"Live fetch failed: {str(e)}"
+        })
 
 
 @tool
@@ -96,15 +108,26 @@ def fetch_defi_opportunities() -> str:
     """Get DeFi protocol context for Hedera ecosystem: SaucerSwap, Bonzo Finance, HeliSwap."""
     return json.dumps({
         "protocols": [
-            {"name": "SaucerSwap", "type": "DEX/AMM", "url": "saucerswap.finance",
-             "features": ["HBAR/token swaps", "Liquidity pools", "Yield farming", "SAUCE staking"],
-             "note": "Largest DEX on Hedera by TVL"},
-            {"name": "Bonzo Finance", "type": "Lending Protocol", "url": "bonzo.finance",
-             "features": ["HBAR lending", "Token collateral", "Borrow stable assets"],
-             "note": "Leading lending protocol on Hedera"},
-            {"name": "HeliSwap", "type": "DEX",
-             "features": ["WHBAR pools", "Low fees"],
-             "note": "Alternative DEX option"},
+            {
+                "name": "SaucerSwap",
+                "type": "DEX/AMM",
+                "url": "saucerswap.finance",
+                "features": ["HBAR/token swaps", "Liquidity pools", "Yield farming", "SAUCE staking"],
+                "note": "Largest DEX on Hedera by TVL"
+            },
+            {
+                "name": "Bonzo Finance",
+                "type": "Lending Protocol",
+                "url": "bonzo.finance",
+                "features": ["HBAR lending", "Token collateral", "Borrow stable assets"],
+                "note": "Leading lending protocol on Hedera"
+            },
+            {
+                "name": "HeliSwap",
+                "type": "DEX",
+                "features": ["WHBAR pools", "Low fees"],
+                "note": "Alternative DEX option"
+            },
         ],
         "strategies": [
             "Provide HBAR/USDC liquidity on SaucerSwap for competitive yield",
@@ -119,11 +142,17 @@ def fetch_defi_opportunities() -> str:
 def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
     """Log an analysis or action to Hedera Consensus Service — creates a permanent, tamper-proof on-chain record."""
     try:
-        from hiero import TopicMessageSubmitTransaction, TopicId
-        client = _hedera_client()
+        from hiero import TopicMessageSubmitTransaction, TopicId, Client, AccountId, PrivateKey
+        client = Client.for_testnet()
+        client.set_operator(
+            AccountId.from_string(HEDERA_ACCOUNT_ID),
+            PrivateKey.from_string(HEDERA_PRIVATE_KEY)
+        )
         payload = json.dumps({
-            "service": "WalletMind", "version": "2.0.0",
-            "wallet": wallet_address, "action": action,
+            "service": "WalletMind",
+            "version": "2.0.0",
+            "wallet": wallet_address,
+            "action": action,
             "summary": summary[:200],
             "timestamp": datetime.utcnow().isoformat(),
             "type": "AGENT_ACTION"
@@ -137,6 +166,7 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
         receipt = resp.get_receipt(client)
         tx_id = str(resp.transaction_id)
         _stats["hcs_messages_logged"] += 1
+        logger.info(f"HCS logged: {tx_id}")
         return json.dumps({
             "success": True,
             "transaction_id": tx_id,
@@ -152,24 +182,28 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
 def create_scheduled_transaction(strategy_memo: str) -> str:
     """Create a real Hedera Scheduled Transaction as on-chain proof of a recommended strategy execution intent."""
     try:
-        from hiero import (ScheduleCreateTransaction, TransferTransaction,
-                           Hbar, AccountId)
-        client = _hedera_client()
+        from hiero import (
+            ScheduleCreateTransaction, TransferTransaction,
+            Hbar, AccountId, Client, PrivateKey
+        )
+        client = Client.for_testnet()
         op_id = AccountId.from_string(HEDERA_ACCOUNT_ID)
+        client.set_operator(op_id, PrivateKey.from_string(HEDERA_PRIVATE_KEY))
         transfer = (
             TransferTransaction()
             .add_hbar_transfer(op_id, Hbar(-0.01))
             .add_hbar_transfer(op_id, Hbar(0.01))
         )
-        sched = (
+        sched_resp = (
             ScheduleCreateTransaction()
             .set_scheduled_transaction(transfer)
             .set_schedule_memo(f"WalletMind: {strategy_memo[:60]}")
             .execute(client)
         )
-        receipt = sched.get_receipt(client)
+        receipt = sched_resp.get_receipt(client)
         schedule_id = str(receipt.schedule_id)
         _stats["scheduled_transactions"] += 1
+        logger.info(f"Scheduled tx created: {schedule_id}")
         return json.dumps({
             "success": True,
             "schedule_id": schedule_id,
@@ -182,7 +216,7 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-# ---------- AGENT ----------
+# ---------- AGENT SETUP ----------
 
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
@@ -190,32 +224,42 @@ llm = ChatGroq(
     temperature=0.1,
 )
 
-TOOLS = [fetch_wallet_info, get_hbar_price, fetch_defi_opportunities,
-         submit_hcs_message, create_scheduled_transaction]
+TOOLS = [
+    fetch_wallet_info,
+    get_hbar_price,
+    fetch_defi_opportunities,
+    submit_hcs_message,
+    create_scheduled_transaction,
+]
 
 SYSTEM = """You are WalletMind — an autonomous AI DeFi agent for the Hedera blockchain.
-You have 5 real tools. For EVERY analysis you MUST execute ALL of these steps in order:
+You have 5 real tools connected to the Hedera network. For EVERY analysis you MUST execute ALL steps in order:
 
-STEP 1: Call fetch_wallet_info with the wallet address
-STEP 2: Call get_hbar_price to get current HBAR value
+STEP 1: Call fetch_wallet_info with the wallet address to get real on-chain data
+STEP 2: Call get_hbar_price to get current HBAR/USD price
 STEP 3: Call fetch_defi_opportunities to see available protocols
-STEP 4: Call submit_hcs_message (action="PORTFOLIO_ANALYSIS", summary=brief description of the wallet state)
-STEP 5: If you have a clear strategy recommendation, call create_scheduled_transaction with the strategy as memo
+STEP 4: Call submit_hcs_message with action="PORTFOLIO_ANALYSIS" and a brief summary of the wallet state
+STEP 5: Call create_scheduled_transaction with the top recommended strategy as the memo
 
-Then write your final response in this format:
+Then write your final response in this exact format:
+
 ## Portfolio Summary
-Real balances with USD values (use the price you fetched)
+Real balances with USD values (use the HBAR price you fetched in Step 2)
 
 ## Key Observations
-2-3 insights specific to THIS wallet
+2-3 specific insights about THIS wallet's actual holdings and transaction patterns
 
 ## Recommended Strategy
-Specific, actionable steps for these exact holdings
+Specific, actionable steps for these exact holdings and amounts
 
 ## Risk Assessment
-Clear risk level and factors
+Clear risk level (Low/Medium/High) with specific factors for this wallet
 
-Always use real numbers. Never give generic advice. Be direct and confident."""
+Rules:
+- Always use the real numbers from fetch_wallet_info
+- Always multiply HBAR balance by price from get_hbar_price to show USD value
+- Never give generic advice — everything must reference actual wallet data
+- Be direct and specific, not vague"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM),
@@ -227,7 +271,7 @@ agent_executor = AgentExecutor(
     agent=create_tool_calling_agent(llm, TOOLS, prompt),
     tools=TOOLS,
     verbose=True,
-    max_iterations=8,
+    max_iterations=10,
     handle_parsing_errors=True,
 )
 
@@ -237,6 +281,7 @@ agent_executor = AgentExecutor(
 class AnalyzeRequest(BaseModel):
     wallet_address: str
     question: Optional[str] = "Give me a complete portfolio analysis and DeFi strategy."
+
 
 class AnalyzeResponse(BaseModel):
     analysis: str
@@ -252,8 +297,13 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "WalletMind", "version": "2.0.0",
-            "agent": "LangChain + Hedera Agent Kit", "hcs_topic": HCS_TOPIC_ID}
+    return {
+        "status": "ok",
+        "service": "WalletMind",
+        "version": "2.0.0",
+        "agent": "LangChain + Hedera Agent Kit",
+        "hcs_topic": HCS_TOPIC_ID
+    }
 
 
 @app.get("/stats")
@@ -268,8 +318,8 @@ async def get_stats():
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_wallet(req: AnalyzeRequest):
-    wallet = req.wallet_address.strip()
+async def analyze_wallet(req_body: AnalyzeRequest):
+    wallet = req_body.wallet_address.strip()
     if not re.match(r'^\d+\.\d+\.\d+$', wallet):
         raise HTTPException(status_code=400, detail="Invalid Hedera address. Use format: 0.0.xxxxxx")
 
@@ -281,7 +331,7 @@ async def analyze_wallet(req: AnalyzeRequest):
         result = await loop.run_in_executor(
             None,
             lambda: agent_executor.invoke(
-                {"input": f"Wallet: {wallet}\nQuestion: {req.question}"}
+                {"input": f"Wallet: {wallet}\nQuestion: {req_body.question}"}
             ),
         )
 
@@ -299,25 +349,36 @@ async def analyze_wallet(req: AnalyzeRequest):
             except Exception:
                 pass
 
-        wallet_data: dict = {"account_id": wallet, "hbar_balance": 0,
-                             "token_count": 0, "tx_count_30d": 0,
-                             "tokens": [], "evm_address": ""}
-        async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(f"{MIRROR}/api/v1/accounts/{wallet}")
-            if r.status_code == 200:
-                acct = r.json()
-                hbar = acct.get("balance", {}).get("balance", 0) / 1e8
-                tr = await c.get(f"{MIRROR}/api/v1/accounts/{wallet}/tokens",
-                                 params={"limit": 10})
-                raw_tokens = tr.json().get("tokens", [])
-                wallet_data = {
-                    "account_id": wallet,
-                    "hbar_balance": round(hbar, 4),
-                    "token_count": len(raw_tokens),
-                    "tx_count_30d": 20,
-                    "tokens": [],
-                    "evm_address": acct.get("evm_address", ""),
-                }
+        # Fetch wallet data for sidebar
+        wallet_data: dict = {
+            "account_id": wallet,
+            "hbar_balance": 0,
+            "token_count": 0,
+            "tx_count_30d": 0,
+            "tokens": [],
+            "evm_address": ""
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get(f"{MIRROR}/api/v1/accounts/{wallet}")
+                if r.status_code == 200:
+                    acct = r.json()
+                    hbar = acct.get("balance", {}).get("balance", 0) / 1e8
+                    tr = await c.get(
+                        f"{MIRROR}/api/v1/accounts/{wallet}/tokens",
+                        params={"limit": 10}
+                    )
+                    raw_tokens = tr.json().get("tokens", [])
+                    wallet_data = {
+                        "account_id": wallet,
+                        "hbar_balance": round(hbar, 4),
+                        "token_count": len(raw_tokens),
+                        "tx_count_30d": 20,
+                        "tokens": [],
+                        "evm_address": acct.get("evm_address", ""),
+                    }
+        except Exception as e:
+            logger.warning(f"Sidebar wallet fetch failed: {e}")
 
         return AnalyzeResponse(
             analysis=output,
@@ -328,6 +389,7 @@ async def analyze_wallet(req: AnalyzeRequest):
             timestamp=datetime.utcnow().isoformat(),
             wallet_address=wallet,
         )
+
     except Exception as e:
         logger.error(f"Agent error: {e}")
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
@@ -335,7 +397,8 @@ async def analyze_wallet(req: AnalyzeRequest):
 
 @app.get("/wallet/{address}")
 async def get_wallet(address: str):
-    if not re.match(r'^\d+\.\d+\.\d+$', address.strip()):
+    import re as _re
+    if not _re.match(r'^\d+\.\d+\.\d+$', address.strip()):
         raise HTTPException(status_code=400, detail="Invalid address format")
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(f"{MIRROR}/api/v1/accounts/{address}")
@@ -356,7 +419,7 @@ async def list_tools_endpoint():
         ],
         "llm": "Groq Llama 3.3 70B",
         "framework": "LangChain + Hedera Agent Kit",
-        "hedera_sdk": "hiero-sdk-python v0.1.9",
+        "hedera_sdk": "hiero-sdk-python v0.2.2",
         "agent_type": "tool_calling_agent",
     }
 
