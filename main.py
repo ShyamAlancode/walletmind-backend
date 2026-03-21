@@ -22,11 +22,9 @@ logger = logging.getLogger(__name__)
 
 # ---------- IN-MEMORY STATS ----------
 _stats = {
-    "total_analyses": 0,
-    "unique_wallets": set(),
+    "analyses_run": 0,
     "hcs_messages_logged": 0,
     "scheduled_transactions": 0,
-    "uptime_since": datetime.utcnow().isoformat(),
 }
 
 HEDERA_ACCOUNT_ID = os.getenv("HEDERA_ACCOUNT_ID", "")
@@ -316,13 +314,7 @@ async def health():
 
 @app.get("/stats")
 async def get_stats():
-    return {
-        "total_analyses": _stats["total_analyses"],
-        "unique_wallets": len(_stats["unique_wallets"]),
-        "hcs_messages_logged": _stats["hcs_messages_logged"],
-        "scheduled_transactions": _stats["scheduled_transactions"],
-        "uptime_since": _stats["uptime_since"],
-    }
+    return _stats
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -331,8 +323,7 @@ async def analyze_wallet(req_body: AnalyzeRequest):
     if not re.match(r'^\d+\.\d+\.\d+$', wallet):
         raise HTTPException(status_code=400, detail="Invalid Hedera address. Use format: 0.0.xxxxxx")
 
-    _stats["total_analyses"] += 1
-    _stats["unique_wallets"].add(wallet)
+    _stats["analyses_run"] += 1
 
     try:
         loop = asyncio.get_event_loop()
