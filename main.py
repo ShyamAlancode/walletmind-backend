@@ -298,6 +298,11 @@ class AnalyzeResponse(BaseModel):
 
 # ---------- ENDPOINTS ----------
 
+@app.get("/")
+async def root():
+    return {"service": "WalletMind API", "status": "ok", "version": "1.0.0"}
+
+
 @app.get("/health")
 async def health():
     return {
