@@ -148,16 +148,16 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
     """Log an analysis or action to Hedera Consensus Service — creates a permanent, tamper-proof on-chain record."""
     try:
         import hiero_sdk_python as h
-        client = h.Client.for_testnet()
+        client = h.Client()
+        client.set_network({"0.testnet.hedera.com:50211": h.AccountId(3)})
+        client.set_mirror_network(["testnet.mirrornode.hedera.com:443"])
         client.set_operator(
             h.AccountId.from_string(HEDERA_ACCOUNT_ID),
             h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
         )
         payload = json.dumps({
-            "service": "WalletMind",
-            "version": "2.0.0",
-            "wallet": wallet_address,
-            "action": action,
+            "service": "WalletMind", "version": "2.0.0",
+            "wallet": wallet_address, "action": action,
             "summary": summary[:200],
             "timestamp": datetime.utcnow().isoformat(),
         })
@@ -187,7 +187,9 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
     """Create a real Hedera Scheduled Transaction as on-chain proof of a recommended strategy execution intent."""
     try:
         import hiero_sdk_python as h
-        client = h.Client.for_testnet()
+        client = h.Client()
+        client.set_network({"0.testnet.hedera.com:50211": h.AccountId(3)})
+        client.set_mirror_network(["testnet.mirrornode.hedera.com:443"])
         op_id = h.AccountId.from_string(HEDERA_ACCOUNT_ID)
         client.set_operator(op_id, h.PrivateKey.from_string(HEDERA_PRIVATE_KEY))
         transfer = (
