@@ -56,27 +56,10 @@ def fetch_wallet_info(wallet_address: str) -> str:
             td = ti.json()
             dec = int(td.get("decimals", 0))
             bal = t["balance"] / (10 ** dec) if dec else t["balance"]
-            tokens.append({
-                "token_id": t["token_id"],
-                "symbol": td.get("symbol", "?"),
-                "balance": round(bal, 4)
-            })
-        txr = req.get(
-            f"{MIRROR}/api/v1/transactions",
-            params={"account.id": wallet_address, "limit": 5, "order": "desc"},
-            timeout=10
-        )
-        txs = [
-            {"id": x["transaction_id"], "type": x["name"], "result": x["result"]}
-            for x in txr.json().get("transactions", [])
-        ]
-        return json.dumps({
-            "wallet": wallet_address,
-            "hbar_balance": round(hbar, 4),
-            "tokens": tokens,
-            "recent_transactions": txs,
-            "evm_address": acct.get("evm_address", "")
-        })
+            tokens.append({"token_id": t["token_id"], "symbol": td.get("symbol", "?"), "balance": round(bal, 4)})
+        txr = req.get(f"{MIRROR}/api/v1/transactions", params={"account.id": wallet_address, "limit": 5, "order": "desc"}, timeout=10)
+        txs = [{"id": x["transaction_id"], "type": x["name"], "result": x["result"]} for x in txr.json().get("transactions", [])]
+        return json.dumps({"wallet": wallet_address, "hbar_balance": round(hbar, 4), "tokens": tokens, "recent_transactions": txs, "evm_address": acct.get("evm_address", "")})
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -91,16 +74,10 @@ def get_hbar_price() -> str:
         price = round(cents / 100, 6)
         if price <= 0:
             raise ValueError("Zero price returned")
-        return json.dumps({
-            "hbar_price_usd": price,
-            "source": "Hedera Mirror Node Exchange Rate API"
-        })
+        return json.dumps({"hbar_price_usd": price, "source": "Hedera Mirror Node Exchange Rate API"})
     except Exception as e:
-        return json.dumps({
-            "hbar_price_usd": 0.092,
-            "source": "fallback_estimate",
-            "note": f"Live fetch failed: {str(e)}"
-        })
+        # Fallback to known approximate price
+        return json.dumps({"hbar_price_usd": 0.092, "source": "fallback_estimate", "note": f"Live fetch failed: {str(e)}"})
 
 
 @tool
@@ -108,26 +85,15 @@ def fetch_defi_opportunities() -> str:
     """Get DeFi protocol context for Hedera ecosystem: SaucerSwap, Bonzo Finance, HeliSwap."""
     return json.dumps({
         "protocols": [
-            {
-                "name": "SaucerSwap",
-                "type": "DEX/AMM",
-                "url": "saucerswap.finance",
-                "features": ["HBAR/token swaps", "Liquidity pools", "Yield farming", "SAUCE staking"],
-                "note": "Largest DEX on Hedera by TVL"
-            },
-            {
-                "name": "Bonzo Finance",
-                "type": "Lending Protocol",
-                "url": "bonzo.finance",
-                "features": ["HBAR lending", "Token collateral", "Borrow stable assets"],
-                "note": "Leading lending protocol on Hedera"
-            },
-            {
-                "name": "HeliSwap",
-                "type": "DEX",
-                "features": ["WHBAR pools", "Low fees"],
-                "note": "Alternative DEX option"
-            },
+            {"name": "SaucerSwap", "type": "DEX/AMM", "url": "saucerswap.finance",
+             "features": ["HBAR/token swaps", "Liquidity pools", "Yield farming", "SAUCE staking"],
+             "note": "Largest DEX on Hedera by TVL"},
+            {"name": "Bonzo Finance", "type": "Lending Protocol", "url": "bonzo.finance",
+             "features": ["HBAR lending", "Token collateral", "Borrow stable assets"],
+             "note": "Leading lending protocol on Hedera"},
+            {"name": "HeliSwap", "type": "DEX",
+             "features": ["WHBAR pools", "Low fees"],
+             "note": "Alternative DEX option"},
         ],
         "strategies": [
             "Provide HBAR/USDC liquidity on SaucerSwap for competitive yield",
@@ -149,10 +115,8 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
             PrivateKey.from_string(HEDERA_PRIVATE_KEY)
         )
         payload = json.dumps({
-            "service": "WalletMind",
-            "version": "2.0.0",
-            "wallet": wallet_address,
-            "action": action,
+            "service": "WalletMind", "version": "2.0.0",
+            "wallet": wallet_address, "action": action,
             "summary": summary[:200],
             "timestamp": datetime.utcnow().isoformat(),
             "type": "AGENT_ACTION"
@@ -182,13 +146,11 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
 def create_scheduled_transaction(strategy_memo: str) -> str:
     """Create a real Hedera Scheduled Transaction as on-chain proof of a recommended strategy execution intent."""
     try:
-        from hiero import (
-            ScheduleCreateTransaction, TransferTransaction,
-            Hbar, AccountId, Client, PrivateKey
-        )
+        from hiero import (ScheduleCreateTransaction, TransferTransaction, Hbar, AccountId, Client, PrivateKey)
         client = Client.for_testnet()
         op_id = AccountId.from_string(HEDERA_ACCOUNT_ID)
         client.set_operator(op_id, PrivateKey.from_string(HEDERA_PRIVATE_KEY))
+
         transfer = (
             TransferTransaction()
             .add_hbar_transfer(op_id, Hbar(-0.01))

@@ -7,4 +7,5 @@ uvicorn>=0.30.0
 python-dotenv>=1.0.0
 httpx>=0.27.0
 pydantic>=2.7.0
-hiero-sdk-python>=0.1.9
+hiero-sdk-python==0.1.9
+requests>=2.31.0
