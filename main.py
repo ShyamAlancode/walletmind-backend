@@ -149,8 +149,6 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
     try:
         import hiero_sdk_python as h
         client = h.Client()
-        client.set_network({"0.testnet.hedera.com:50211": h.AccountId(3)})
-        client.set_mirror_network(["testnet.mirrornode.hedera.com:443"])
         client.set_operator(
             h.AccountId.from_string(HEDERA_ACCOUNT_ID),
             h.PrivateKey.from_string(HEDERA_PRIVATE_KEY)
@@ -188,8 +186,6 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
     try:
         import hiero_sdk_python as h
         client = h.Client()
-        client.set_network({"0.testnet.hedera.com:50211": h.AccountId(3)})
-        client.set_mirror_network(["testnet.mirrornode.hedera.com:443"])
         op_id = h.AccountId.from_string(HEDERA_ACCOUNT_ID)
         client.set_operator(op_id, h.PrivateKey.from_string(HEDERA_PRIVATE_KEY))
         transfer = (
