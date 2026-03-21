@@ -224,7 +224,8 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.1,
+    temperature=0,
+    max_tokens=1024,
 )
 
 TOOLS = [
@@ -274,7 +275,8 @@ agent_executor = AgentExecutor(
     agent=create_tool_calling_agent(llm, TOOLS, prompt),
     tools=TOOLS,
     verbose=True,
-    max_iterations=10,
+    max_iterations=4,
+    early_stopping_method="generate",
     handle_parsing_errors=True,
 )
 
@@ -341,8 +343,12 @@ async def analyze_wallet(req_body: AnalyzeRequest):
             ),
         )
 
-        output = result.get("output", "")
-        steps = result.get("intermediate_steps", [])
+        # Safe extraction — handles None and missing keys
+        output = (result or {}).get("output", "").strip()
+        if not output:
+             output = "Analysis complete. Please try again for full details."
+             
+        steps = (result or {}).get("intermediate_steps", [])
 
         tx_hash, schedule_id = None, None
         for action, observation in steps:
