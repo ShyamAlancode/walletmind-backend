@@ -110,7 +110,7 @@ def fetch_defi_opportunities() -> str:
 def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
     """Log an analysis or action to Hedera Consensus Service — creates a permanent, tamper-proof on-chain record."""
     try:
-        from hiero import TopicMessageSubmitTransaction, TopicId, Client, AccountId, PrivateKey
+        from hiero_sdk_python import TopicMessageSubmitTransaction, TopicId, Client, AccountId, PrivateKey
         client = Client.for_testnet()
         client.set_operator(
             AccountId.from_string(HEDERA_ACCOUNT_ID),
@@ -148,7 +148,7 @@ def submit_hcs_message(wallet_address: str, action: str, summary: str) -> str:
 def create_scheduled_transaction(strategy_memo: str) -> str:
     """Create a real Hedera Scheduled Transaction as on-chain proof of a recommended strategy execution intent."""
     try:
-        from hiero import (ScheduleCreateTransaction, TransferTransaction, Hbar, AccountId, Client, PrivateKey)
+        from hiero_sdk_python import ScheduleCreateTransaction, TransferTransaction, Hbar, AccountId, Client, PrivateKey
         client = Client.for_testnet()
         op_id = AccountId.from_string(HEDERA_ACCOUNT_ID)
         client.set_operator(op_id, PrivateKey.from_string(HEDERA_PRIVATE_KEY))
@@ -272,19 +272,11 @@ async def health():
 
 @app.get("/debug-hiero")
 async def debug_hiero():
-    import importlib, os, sys
-    result = {}
-    for name in ["hiero", "hedera", "hiero_sdk", "hashgraph"]:
-        try:
-            mod = importlib.import_module(name)
-            result[f"import_{name}"] = "SUCCESS: " + str([x for x in dir(mod) if not x.startswith("_")][:15])
-        except Exception as e:
-            result[f"import_{name}"] = f"FAILED: {e}"
-    venv = "/app/.venv/lib/python3.11/site-packages"
-    if os.path.exists(venv):
-        result["hedera_dirs"] = [d for d in os.listdir(venv) if any(x in d.lower() for x in ["hiero","hedera","hashgraph"])]
-    result["sys_path"] = sys.path[:5]
-    return result
+    try:
+        import hiero_sdk_python as h
+        return {"status": "OK", "available": [x for x in dir(h) if not x.startswith("_")][:30]}
+    except Exception as e:
+        return {"status": "FAILED", "error": str(e)}
 
 @app.get("/stats")
 async def get_stats():
