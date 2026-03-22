@@ -109,10 +109,15 @@ main().catch(e => {{ console.error("HCS_ERROR:" + e.message); process.exit(1); }
             f.write(script)
 
         import shutil
-        node_path = shutil.which("node") or "/usr/local/bin/node"
+        import os
         
+        # Find node path dynamically
+        node_bin = shutil.which("node") or "/usr/local/bin/node"
+        logger.info(f"Node path: {node_bin}")
+        logger.info(f"Node exists: {os.path.exists(node_bin)}")
+
         result = subprocess.run(
-            [node_path, tmp_path],
+            [node_bin, tmp_path],
             capture_output=True,
             text=True,
             timeout=60,
