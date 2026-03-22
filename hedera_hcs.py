@@ -35,25 +35,26 @@ async def log_to_hcs(payload: dict) -> Optional[str]:
     try:
         from hiero import Client, AccountId, PrivateKey, TopicId, TopicMessageSubmitTransaction
         client = Client.for_testnet()
-        pk = PrivateKey.from_string(HEDERA_PRIVATE_KEY.replace("0x", ""))
+        try:
+            pk = PrivateKey.from_string_ecdsa(HEDERA_PRIVATE_KEY.replace("0x", ""))
+        except Exception:
+            pk = PrivateKey.from_string(HEDERA_PRIVATE_KEY.replace("0x", ""))
         client.set_operator(AccountId.from_string(HEDERA_ACCOUNT_ID), pk)
         topic_id_str = os.getenv("HCS_TOPIC_ID", "")
         if not topic_id_str:
             from hiero import TopicCreateTransaction
-            tx = TopicCreateTransaction().set_topic_memo("WalletMind AI Agent — Hedera Apex Hackathon 2026").execute(client)
-            receipt = tx.get_receipt(client)
+            receipt = TopicCreateTransaction().set_topic_memo("WalletMind AI Agent — Hedera Apex Hackathon 2026").execute(client)
             os.environ["HCS_TOPIC_ID"] = str(receipt.topic_id)
             topic_id_str = str(receipt.topic_id)
 
         topic_id = TopicId.from_string(topic_id_str)
         message_str = json.dumps(payload)
         
-        tx = TopicMessageSubmitTransaction(
+        receipt = TopicMessageSubmitTransaction(
             topic_id=topic_id,
             message=message_str[:500]
         ).execute(client)
-        tx.get_receipt(client)
-        tx_id = str(tx.transaction_id)
+        tx_id = str(receipt.transaction_id)
         logger.info(f"HCS logged natively: {tx_id}")
         return tx_id
     except Exception as e:

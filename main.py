@@ -388,7 +388,7 @@ async def analyze_wallet(req: AnalyzeRequest):
         result = await loop.run_in_executor(
             None,
             lambda: agent_executor.invoke(
-                {"input": f"Wallet: {wallet}\nQuestion: {req.question}"},
+                {"input": f"Wallet: {wallet}\nUser question: {req.question}\n\nAnswer the user's specific question using real wallet data."},
                 {"callbacks": [capture]},
             ),
         )
