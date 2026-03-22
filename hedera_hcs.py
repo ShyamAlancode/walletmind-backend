@@ -108,8 +108,11 @@ main().catch(e => {{ console.error("HCS_ERROR:" + e.message); process.exit(1); }
         with open(tmp_path, "w") as f:
             f.write(script)
 
+        import shutil
+        node_path = shutil.which("node") or "/usr/local/bin/node"
+        
         result = subprocess.run(
-            ["node", tmp_path],
+            [node_path, tmp_path],
             capture_output=True,
             text=True,
             timeout=60,
