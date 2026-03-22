@@ -13,7 +13,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 
-import google.generativeai as genai
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.tools import tool
 
