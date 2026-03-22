@@ -344,15 +344,23 @@ async def analyze_wallet(req_body: AnalyzeRequest):
         steps = (result if 'result' in locals() and result else {}).get("intermediate_steps", [])
 
         tx_hash, schedule_id = None, None
-        for action, observation in steps:
-            try:
-                data = json.loads(str(observation))
-                if action.tool == "submit_hcs_message" and data.get("success"):
-                    tx_hash = data.get("transaction_id")
-                if action.tool == "create_scheduled_transaction" and data.get("success"):
-                    schedule_id = data.get("schedule_id")
-            except Exception:
-                pass
+        try:
+            for action, observation in steps:
+                try:
+                    tool_output = str(observation)
+                    if "transaction_id" in tool_output:
+                        data = json.loads(tool_output)
+                        if data.get("success") and data.get("transaction_id"):
+                            tx_hash = data["transaction_id"]
+                    
+                    if "schedule_id" in tool_output:
+                        data = json.loads(tool_output)
+                        if data.get("success") and data.get("schedule_id"):
+                            schedule_id = data["schedule_id"]
+                except:
+                    pass
+        except Exception as e:
+            logger.warning(f"Metadata extraction failed: {e}")
 
         wallet_data: dict = {
             "account_id": wallet,
