@@ -283,10 +283,10 @@ class AnalyzeRequest(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     analysis: str
-    wallet_data: dict
-    tx_hash: Optional[str]
-    schedule_id: Optional[str]
-    agent_steps: int
+    wallet_data: dict = {}
+    tx_hash: Optional[str] = None
+    schedule_id: Optional[str] = None
+    agent_steps: int = 0
     timestamp: str
     wallet_address: str
 
@@ -384,9 +384,12 @@ async def analyze_wallet(req_body: AnalyzeRequest):
         except Exception as e:
             logger.warning(f"Sidebar wallet fetch failed: {e}")
 
+        # Final Debug Log
+        logger.info(f"Returning: analysis={bool(output)}, wallet_data={bool(wallet_data)}, tx_hash={tx_hash}, steps={len(steps)}")
+        
         return AnalyzeResponse(
             analysis=output,
-            wallet_data=wallet_data,
+            wallet_data=wallet_data if wallet_data else {},
             tx_hash=tx_hash,
             schedule_id=schedule_id,
             agent_steps=len(steps),
