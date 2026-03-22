@@ -86,24 +86,19 @@ def fetch_wallet_info(wallet_address: str) -> str:
 
 @tool
 def get_hbar_price() -> str:
-    """Get current HBAR/USD price from Hedera Mirror Node Exchange Rate API."""
+    """Get the current real-time HBAR/USD price from CoinGecko."""
     try:
-        r = req.get(f"{MIRROR}/api/v1/network/exchangerate", timeout=10)
-        rate = r.json().get("current_rate", {})
-        cents = rate.get("cent_equivalent", 0) / max(rate.get("hbar_equivalent", 1), 1)
-        price = round(cents / 100, 6)
-        if price <= 0:
-            raise ValueError("Zero price returned")
-        return json.dumps({
-            "hbar_price_usd": price,
-            "source": "Hedera Mirror Node Exchange Rate API"
-        })
+        import httpx
+        resp = httpx.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": "hedera-hashgraph", "vs_currencies": "usd"},
+            timeout=10
+        )
+        data = resp.json()
+        price = data["hedera-hashgraph"]["usd"]
+        return json.dumps({"hbar_usd": price, "source": "CoinGecko"})
     except Exception as e:
-        return json.dumps({
-            "hbar_price_usd": 0.092,
-            "source": "fallback_estimate",
-            "note": f"Live fetch failed: {str(e)}"
-        })
+        return json.dumps({"hbar_usd": 0.065, "source": "fallback", "error": str(e)})
 
 
 @tool
@@ -229,9 +224,9 @@ llm = ChatGroq(
 TOOLS = [
     fetch_wallet_info,
     get_hbar_price,
-    fetch_defi_opportunities,
     submit_hcs_message,
     create_scheduled_transaction,
+    fetch_defi_opportunities,
 ]
 
 SYSTEM = """You are WalletMind — an autonomous AI DeFi agent for the Hedera blockchain.
