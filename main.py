@@ -14,6 +14,7 @@ from pydantic import BaseModel
 import httpx
 
 from langchain_groq import ChatGroq
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -304,6 +305,15 @@ class AnalyzeResponse(BaseModel):
     timestamp: str
     wallet_address: str
 
+# ── CALLBACKS ─────────────────────────────────────────────────────────────────
+class ToolOutputCapture(BaseCallbackHandler):
+    """Captures tool outputs even if agent crashes before returning."""
+    def __init__(self):
+        self.tool_outputs = []
+    def on_tool_end(self, output, **kwargs):
+        if isinstance(output, str):
+            self.tool_outputs.append(output)
+
 # ── ENDPOINTS ─────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -371,30 +381,24 @@ async def analyze_wallet(req: AnalyzeRequest):
     tx_hash = None
     schedule_id = None
     hashscan_url = None
-    intermediate_steps = []
+    capture = ToolOutputCapture()
 
     try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
             lambda: agent_executor.invoke(
-                {"input": f"Wallet: {wallet}\nQuestion: {req.question}"}
+                {"input": f"Wallet: {wallet}\nQuestion: {req.question}"},
+                {"callbacks": [capture]},
             ),
         )
-        # Handle None result from force-stop
-        if result is None:
-            result = {}
-
-        output = (result.get("output") or "").strip()
-        intermediate_steps = result.get("intermediate_steps", [])
-
+        if result:
+            output = (result.get("output") or "").strip()
     except Exception as agent_err:
         logger.error(f"Agent error: {agent_err}")
 
-    # Extract tx_hash/schedule_id OUTSIDE try block — always runs
-    for action, tool_output in intermediate_steps:
-        if not isinstance(tool_output, str):
-            continue
+    # Extract tx_hash/schedule_id from captured tool outputs — always runs
+    for tool_output in capture.tool_outputs:
         try:
             parsed = json.loads(tool_output)
             if parsed.get("success"):
