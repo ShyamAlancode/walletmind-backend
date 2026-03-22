@@ -32,14 +32,13 @@ ACTION_QUEUE:
 → [Second action]
 → [Third action]"""
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini_model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
-    generation_config={"max_output_tokens": 2048, "temperature": 0.4}
-)
-
 async def run_advisor(scout_brief: dict) -> str:
     """Agent 2: Reads Scout's brief (via HCS) and generates DeFi strategy."""
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    gemini_model = genai.GenerativeModel(
+        model_name="gemini-2.0-flash",
+        generation_config={"max_output_tokens": 2048, "temperature": 0.4}
+    )
     
     prompt_text = f"{ADVISOR_PROMPT}\n\nMarket Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
     

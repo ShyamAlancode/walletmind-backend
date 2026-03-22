@@ -299,12 +299,6 @@ RULES:
 - If question is just "analyze" — give the full structure above.
 """
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini_model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
-    generation_config={"max_output_tokens": 2048, "temperature": 0.7}
-)
-
 from agents.orchestrator import run_agent_network
 
 # ── MODELS ────────────────────────────────────────────────────────────────────

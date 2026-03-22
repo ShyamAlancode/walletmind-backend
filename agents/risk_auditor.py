@@ -31,14 +31,13 @@ AUDITOR_OVERRIDE:
 FINAL_RECOMMENDATION:
 [1 clear sentence: proceed / proceed with caution / do not proceed]"""
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini_model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
-    generation_config={"max_output_tokens": 2048, "temperature": 0.2}
-)
-
 async def run_risk_auditor(scout_brief: dict, advisor_strategy: str) -> str:
     """Agent 3: Reads Advisor's strategy (via HCS) and independently audits risk."""
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    gemini_model = genai.GenerativeModel(
+        model_name="gemini-2.0-flash",
+        generation_config={"max_output_tokens": 2048, "temperature": 0.2}
+    )
     
     prompt_text = f"""{RISK_PROMPT}
 
