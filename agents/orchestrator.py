@@ -26,7 +26,7 @@ async def run_agent_network(wallet_address: str, raw_wallet_data: dict) -> dict:
         "timestamp": int(time.time()),
         "brief": scout_brief
     }
-    scout_tx = submit_hcs_message(json.dumps(scout_payload))
+    scout_tx = await submit_hcs_message(json.dumps(scout_payload))
     
     events.append({
         "agent": "Market Scout",
@@ -49,7 +49,7 @@ async def run_agent_network(wallet_address: str, raw_wallet_data: dict) -> dict:
         "timestamp": int(time.time()),
         "strategy_summary": advisor_strategy[:500]
     }
-    advisor_tx = submit_hcs_message(json.dumps(advisor_payload))
+    advisor_tx = await submit_hcs_message(json.dumps(advisor_payload))
     
     events.append({
         "agent": "Strategy Advisor",
@@ -80,7 +80,7 @@ async def run_agent_network(wallet_address: str, raw_wallet_data: dict) -> dict:
         "verdict": verdict,
         "risk_summary": risk_report[:500]
     }
-    risk_tx = submit_hcs_message(json.dumps(risk_payload))
+    risk_tx = await submit_hcs_message(json.dumps(risk_payload))
     
     events.append({
         "agent": "Risk Auditor",
