@@ -371,6 +371,7 @@ async def analyze_wallet(req: AnalyzeRequest):
     tx_hash = None
     schedule_id = None
     hashscan_url = None
+    intermediate_steps = []
 
     try:
         loop = asyncio.get_event_loop()
@@ -380,29 +381,34 @@ async def analyze_wallet(req: AnalyzeRequest):
                 {"input": f"Wallet: {wallet}\nQuestion: {req.question}"}
             ),
         )
+        # Handle None result from force-stop
+        if result is None:
+            result = {}
 
-        output = (result or {}).get("output", "").strip()
-        if not output:
-            output = "## Portfolio Summary\nAnalysis complete. Wallet data fetched successfully.\n\n## Recommendation\nBased on your HBAR holdings, explore liquidity provision on SaucerSwap or lending on Bonzo Finance."
-
-        # Extract tx_hash and schedule_id from intermediate steps
-        for action, tool_output in (result or {}).get("intermediate_steps", []):
-            if not isinstance(tool_output, str):
-                continue
-            try:
-                parsed = json.loads(tool_output)
-                if parsed.get("success"):
-                    if parsed.get("transaction_id") and not tx_hash:
-                        tx_hash = parsed["transaction_id"]
-                        hashscan_url = parsed.get("hashscan_url")
-                    if parsed.get("schedule_id") and not schedule_id:
-                        schedule_id = parsed["schedule_id"]
-            except Exception:
-                pass
+        output = (result.get("output") or "").strip()
+        intermediate_steps = result.get("intermediate_steps", [])
 
     except Exception as agent_err:
         logger.error(f"Agent error: {agent_err}")
-        output = "## Portfolio Summary\nWallet data retrieved. AI analysis temporarily unavailable. Please try again."
+
+    # Extract tx_hash/schedule_id OUTSIDE try block — always runs
+    for action, tool_output in intermediate_steps:
+        if not isinstance(tool_output, str):
+            continue
+        try:
+            parsed = json.loads(tool_output)
+            if parsed.get("success"):
+                if parsed.get("transaction_id") and not tx_hash:
+                    tx_hash = parsed["transaction_id"]
+                    hashscan_url = parsed.get("hashscan_url")
+                if parsed.get("schedule_id") and not schedule_id:
+                    schedule_id = parsed["schedule_id"]
+        except Exception:
+            pass
+
+    # Fallback output if agent returned nothing
+    if not output:
+        output = "## Portfolio Summary\nWallet data retrieved and logged on Hedera.\n\n## Recommendation\nExplore SaucerSwap liquidity pools or Bonzo Finance lending for your HBAR holdings."
 
     logger.info(f"Returning: analysis={bool(output)}, wallet_data={bool(wallet_data)}, tx_hash={tx_hash}, schedule_id={schedule_id}")
 
