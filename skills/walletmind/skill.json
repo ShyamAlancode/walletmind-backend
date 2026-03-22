@@ -1,0 +1,9 @@
+{
+  "name": "walletmind",
+  "version": "1.0.0",
+  "description": "Verifiable AI DeFi copilot for Hedera wallets with on-chain proof of every analysis",
+  "author": "WalletMind",
+  "license": "MIT",
+  "capabilities": ["portfolio_analysis", "defi_strategy", "hcs_logging", "scheduled_transactions"],
+  "networks": ["hedera-testnet", "hedera-mainnet"]
+}
