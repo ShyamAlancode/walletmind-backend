@@ -324,6 +324,8 @@ agent_executor = AgentExecutor(
     return_intermediate_steps=True,
 )
 
+from agents.orchestrator import run_agent_network
+
 # ── MODELS ────────────────────────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
@@ -333,9 +335,16 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     analysis: str
     wallet_data: dict = {}
+    agent_events: list = []
+    scout_brief: dict = {}
+    advisor_strategy: str = ""
+    risk_report: str = ""
+    verdict: str = ""
     tx_hash: Optional[str] = None
     schedule_id: Optional[str] = None
     hashscan_url: Optional[str] = None
+    hcs_topic: Optional[str] = None
+    hcs_transactions: dict = {}
     timestamp: str
     wallet_address: str
 
@@ -410,58 +419,46 @@ async def analyze_wallet(req: AnalyzeRequest):
     except Exception as e:
         logger.warning(f"Sidebar wallet fetch failed: {e}")
 
-    # Run agent
-    output = ""
-    tx_hash = None
-    schedule_id = None
-    hashscan_url = None
-    capture = ToolOutputCapture()
-
+    # Run the 3-agent network
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: agent_executor.invoke(
-                {
-                    "input": f"Wallet: {wallet}\nQuestion: {req.question}\n\nAnswer this specific question using real on-chain data from the tools.",
-                    "question": req.question
-                },
-                {"callbacks": [capture]},
-            ),
+        result = await run_agent_network(wallet, wallet_data)
+        
+        # Merge individual agent data for the response
+        agent_events = result.get("agent_events", [])
+        scout_brief = result.get("scout_brief", {})
+        advisor_strategy = result.get("advisor_strategy", "")
+        risk_report = result.get("risk_report", "")
+        verdict = result.get("verdict", "")
+        hcs_topic = result.get("hcs_topic")
+        hcs_txs = result.get("hcs_transactions", {})
+        
+        # Compatibility: main analysis string is the Advisor's strategy
+        analysis = advisor_strategy or "## Analysis Pending\nAgent network is processing."
+
+        logger.info(f"Agent network complete for {wallet}. Verdict: {verdict}")
+
+        return AnalyzeResponse(
+            analysis=analysis,
+            wallet_data=wallet_data,
+            agent_events=agent_events,
+            scout_brief=scout_brief,
+            advisor_strategy=advisor_strategy,
+            risk_report=risk_report,
+            verdict=verdict,
+            tx_hash=hcs_txs.get("scout"), # Use scout tx as primary audit ref
+            hcs_topic=hcs_topic,
+            hcs_transactions=hcs_txs,
+            timestamp=datetime.utcnow().isoformat(),
+            wallet_address=wallet,
         )
-        if result:
-            output = (result.get("output") or "").strip()
+
     except Exception as agent_err:
-        logger.error(f"Agent error: {agent_err}")
-
-    # Extract tx_hash/schedule_id from captured tool outputs — always runs
-    for tool_output in capture.tool_outputs:
-        try:
-            parsed = json.loads(tool_output)
-            if parsed.get("success"):
-                if parsed.get("transaction_id") and not tx_hash:
-                    tx_hash = parsed["transaction_id"]
-                    hashscan_url = parsed.get("hashscan_url")
-                if parsed.get("schedule_id") and not schedule_id:
-                    schedule_id = parsed["schedule_id"]
-        except Exception:
-            pass
-
-    # Fallback output if agent returned nothing
-    if not output:
-        output = "## Portfolio Summary\nWallet data retrieved and logged on Hedera.\n\n## Recommendation\nExplore SaucerSwap liquidity pools or Bonzo Finance lending for your HBAR holdings."
-
-    logger.info(f"Returning: analysis={bool(output)}, wallet_data={bool(wallet_data)}, tx_hash={tx_hash}, schedule_id={schedule_id}")
-
-    return AnalyzeResponse(
-        analysis=output,
-        wallet_data=wallet_data,
-        tx_hash=tx_hash,
-        schedule_id=schedule_id,
-        hashscan_url=hashscan_url,
-        timestamp=datetime.utcnow().isoformat(),
-        wallet_address=wallet,
-    )
+        logger.error(f"Agent Network error: {agent_err}")
+        return AnalyzeResponse(
+            analysis=f"## System Error\n{str(agent_err)}",
+            wallet_address=wallet,
+            timestamp=datetime.utcnow().isoformat(),
+        )
 
 @app.get("/{wallet_address}")
 async def get_wallet(wallet_address: str):
