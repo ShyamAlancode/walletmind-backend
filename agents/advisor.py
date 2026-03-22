@@ -1,7 +1,6 @@
 # agents/advisor.py
 import os, json
-from langchain_groq import ChatGroq
-from langchain.schema import SystemMessage, HumanMessage
+import google.generativeai as genai
 
 ADVISOR_PROMPT = """You are WalletMind Strategy Advisor Agent — a DeFi strategy specialist.
 You receive a structured wallet brief from Market Scout Agent (via HCS) and produce a personalized strategy.
@@ -33,19 +32,16 @@ ACTION_QUEUE:
 → [Second action]
 → [Third action]"""
 
-advisor_llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.4
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash",
+    generation_config={"max_output_tokens": 2048, "temperature": 0.4}
 )
 
 async def run_advisor(scout_brief: dict) -> str:
     """Agent 2: Reads Scout's brief (via HCS) and generates DeFi strategy."""
     
-    messages = [
-        SystemMessage(content=ADVISOR_PROMPT),
-        HumanMessage(content=f"Market Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}")
-    ]
+    prompt_text = f"{ADVISOR_PROMPT}\n\nMarket Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
     
-    response = await advisor_llm.ainvoke(messages)
-    return response.content
+    response = await gemini_model.generate_content_async(prompt_text)
+    return response.text

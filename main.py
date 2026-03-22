@@ -13,11 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 
-from langchain_groq import ChatGroq
+import google.generativeai as genai
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.tools import tool
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -301,27 +299,10 @@ RULES:
 - If question is just "analyze" — give the full structure above.
 """
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM_PROMPT),
-    ("human", "{input}"),
-    MessagesPlaceholder(variable_name="agent_scratchpad"),
-])
-
-llm = ChatGroq(
-    api_key=GROQ_API_KEY,
-    model="llama-3.3-70b-versatile",
-    temperature=0,
-    max_tokens=1024,
-)
-
-agent_executor = AgentExecutor(
-    agent=create_tool_calling_agent(llm, TOOLS, prompt),
-    tools=TOOLS,
-    verbose=True,
-    max_iterations=8,
-    early_stopping_method="force",
-    handle_parsing_errors=True,
-    return_intermediate_steps=True,
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash",
+    generation_config={"max_output_tokens": 2048, "temperature": 0.7}
 )
 
 from agents.orchestrator import run_agent_network

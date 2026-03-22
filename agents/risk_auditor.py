@@ -1,7 +1,6 @@
 # agents/risk_auditor.py
 import os, json
-from langchain_groq import ChatGroq
-from langchain.schema import SystemMessage, HumanMessage
+import google.generativeai as genai
 
 RISK_PROMPT = """You are WalletMind Risk Auditor Agent — a completely INDEPENDENT risk analyst.
 You receive the Strategy Advisor Agent's recommendations (from HCS) and stress-test them.
@@ -32,18 +31,17 @@ AUDITOR_OVERRIDE:
 FINAL_RECOMMENDATION:
 [1 clear sentence: proceed / proceed with caution / do not proceed]"""
 
-risk_llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.2
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash",
+    generation_config={"max_output_tokens": 2048, "temperature": 0.2}
 )
 
 async def run_risk_auditor(scout_brief: dict, advisor_strategy: str) -> str:
     """Agent 3: Reads Advisor's strategy (via HCS) and independently audits risk."""
     
-    messages = [
-        SystemMessage(content=RISK_PROMPT),
-        HumanMessage(content=f"""
+    prompt_text = f"""{RISK_PROMPT}
+
 Wallet Brief (from Scout Agent via HCS):
 {json.dumps(scout_brief, indent=2)}
 
@@ -51,8 +49,7 @@ Strategy Advisor's Recommendations (from HCS Topic B):
 {advisor_strategy}
 
 Perform your independent risk audit now.
-""")
-    ]
+"""
     
-    response = await risk_llm.ainvoke(messages)
-    return response.content
+    response = await gemini_model.generate_content_async(prompt_text)
+    return response.text
