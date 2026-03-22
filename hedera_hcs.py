@@ -135,3 +135,6 @@ main().catch(e => {{ console.error("HCS_ERROR:" + e.message); process.exit(1); }
     except Exception as e:
         logger.error(f"HCS exception: {e}")
         return None
+
+# Alias for multi-agent orchestrator
+submit_hcs_message = log_to_hcs
