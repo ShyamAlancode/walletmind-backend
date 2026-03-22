@@ -1,6 +1,6 @@
 # agents/advisor.py
 import os, json
-from google import genai
+from groq import AsyncGroq
 
 ADVISOR_PROMPT = """You are WalletMind Strategy Advisor Agent — a DeFi strategy specialist.
 You receive a structured wallet brief from Market Scout Agent (via HCS) and produce a personalized strategy.
@@ -34,12 +34,17 @@ ACTION_QUEUE:
 
 async def run_advisor(scout_brief: dict) -> str:
     """Agent 2: Reads Scout's brief (via HCS) and generates DeFi strategy."""
-    client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
     
-    prompt_text = f"{ADVISOR_PROMPT}\n\nMarket Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
+    prompt_text = f"Market Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
     
-    response = await client_gemini.aio.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt_text
+    response = await groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": ADVISOR_PROMPT},
+            {"role": "user", "content": prompt_text}
+        ],
+        max_tokens=2048,
+        temperature=0.4
     )
-    return response.text
+    return response.choices[0].message.content

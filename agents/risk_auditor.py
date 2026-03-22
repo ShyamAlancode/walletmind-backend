@@ -1,6 +1,6 @@
 # agents/risk_auditor.py
 import os, json
-from google import genai
+from groq import AsyncGroq
 
 RISK_PROMPT = """You are WalletMind Risk Auditor Agent — a completely INDEPENDENT risk analyst.
 You receive the Strategy Advisor Agent's recommendations (from HCS) and stress-test them.
@@ -33,21 +33,23 @@ FINAL_RECOMMENDATION:
 
 async def run_risk_auditor(scout_brief: dict, advisor_strategy: str) -> str:
     """Agent 3: Reads Advisor's strategy (via HCS) and independently audits risk."""
-    client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
     
-    prompt_text = f"""{RISK_PROMPT}
-
-Wallet Brief (from Scout Agent via HCS):
+    prompt_text = f"""Wallet Brief (from Scout Agent via HCS):
 {json.dumps(scout_brief, indent=2)}
 
 Strategy Advisor's Recommendations (from HCS Topic B):
 {advisor_strategy}
 
-Perform your independent risk audit now.
-"""
-    
-    response = await client_gemini.aio.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt_text
+Perform your independent risk audit now."""
+
+    response = await groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": RISK_PROMPT},
+            {"role": "user", "content": prompt_text}
+        ],
+        max_tokens=2048,
+        temperature=0.2
     )
-    return response.text
+    return response.choices[0].message.content
