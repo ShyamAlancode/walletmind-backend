@@ -238,34 +238,22 @@ def create_scheduled_transaction(strategy_memo: str) -> str:
 TOOLS = [fetch_wallet_info, get_hbar_price, get_defi_opportunities,
          submit_hcs_message, create_scheduled_transaction]
 
-SYSTEM_PROMPT = """You are WalletMind, an expert autonomous DeFi advisor for the Hedera blockchain.
+SYSTEM_PROMPT = """You are WalletMind, an expert autonomous DeFi advisor for Hedera.
 
-You have 5 tools. For EVERY analysis, follow this EXACT sequence — call each tool EXACTLY ONCE:
-1. fetch_wallet_info — get the wallet's real on-chain data
-2. get_hbar_price — get the current HBAR/USD price
-3. get_defi_opportunities — get live Hedera DeFi context
-4. submit_hcs_message — log this interaction on Hedera HCS (action="PORTFOLIO_ANALYSIS")
-5. create_scheduled_transaction — create on-chain proof of the recommended strategy
+MANDATORY SEQUENCE — follow EXACTLY ONCE in this order:
+Step 1: fetch_wallet_info
+Step 2: get_hbar_price
+Step 3: get_defi_opportunities
+Step 4: submit_hcs_message
+Step 5: create_scheduled_transaction
+Step 6: STOP calling tools. Write your final analysis immediately.
 
-After all 5 tool calls, write your final analysis in this EXACT format:
+User question: {question}
 
-## Portfolio Summary
-[Mention their exact HBAR balance and USD value using the real price from get_hbar_price]
+AFTER all 5 tools, write a detailed answer to the user's specific question using real data.
+Format with sections: Portfolio Summary, Key Observations, Recommended Strategy, Risk Assessment.
 
-## Key Observations
-[3 specific observations about THIS wallet's holdings and transaction history]
-
-## Recommended Strategy
-[Specific actionable advice referencing real Hedera protocols — SaucerSwap, Bonzo Finance, HeliSwap]
-
-## Risk Assessment
-[Honest risk level with specific reasoning for THIS wallet]
-
-RULES:
-- Never call the same tool twice
-- Always use real data from tools — never invent numbers
-- Never invent APY percentages — reference protocols only
-- Be specific to this wallet, never give generic advice"""
+CRITICAL: After step 5, do NOT call any tool again. Write the final answer directly."""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
@@ -284,7 +272,7 @@ agent_executor = AgentExecutor(
     agent=create_tool_calling_agent(llm, TOOLS, prompt),
     tools=TOOLS,
     verbose=True,
-    max_iterations=6,
+    max_iterations=8,
     early_stopping_method="force",
     handle_parsing_errors=True,
     return_intermediate_steps=True,
@@ -388,7 +376,10 @@ async def analyze_wallet(req: AnalyzeRequest):
         result = await loop.run_in_executor(
             None,
             lambda: agent_executor.invoke(
-                {"input": f"Wallet: {wallet}\nUser question: {req.question}\n\nAnswer the user's specific question using real wallet data."},
+                {
+                    "input": f"Wallet: {wallet}\nQuestion: {req.question}\n\nAnswer this specific question using real on-chain data from the tools.",
+                    "question": req.question
+                },
                 {"callbacks": [capture]},
             ),
         )
