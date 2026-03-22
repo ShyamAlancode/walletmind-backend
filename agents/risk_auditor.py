@@ -44,7 +44,7 @@ Strategy Advisor's Recommendations (from HCS Topic B):
 Perform your independent risk audit now."""
 
     response = await groq_client.chat.completions.create(
-        model="gemma2-9b-it",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": RISK_PROMPT},
             {"role": "user", "content": prompt_text}

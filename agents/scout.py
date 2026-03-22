@@ -28,7 +28,7 @@ async def run_scout(wallet_address: str, raw_data: dict) -> dict:
     prompt_text = f"Wallet: {wallet_address}\n\nRaw Data:\n{json.dumps(raw_data, indent=2)[:3000]}"
     
     response = await groq_client.chat.completions.create(
-        model="gemma2-9b-it",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": SCOUT_PROMPT},
             {"role": "user", "content": prompt_text}

@@ -39,7 +39,7 @@ async def run_advisor(scout_brief: dict) -> str:
     prompt_text = f"Market Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
     
     response = await groq_client.chat.completions.create(
-        model="gemma2-9b-it",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": ADVISOR_PROMPT},
             {"role": "user", "content": prompt_text}
