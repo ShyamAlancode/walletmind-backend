@@ -117,23 +117,33 @@ def get_hbar_price() -> str:
 
 @tool
 def get_defi_opportunities() -> str:
-    """Get current DeFi opportunities on Hedera including SaucerSwap and Bonzo Finance."""
+    """Get live DeFi opportunities on Hedera including Bonzo Finance lending rates."""
     try:
         import httpx as _httpx
-        bonzo_info = {}
+        bonzo = {}
         with _httpx.Client(timeout=8.0) as client:
-            resp = client.get(f"{MIRROR_NODE_URL}/api/v1/tokens/0.0.1183558")
-            if resp.status_code == 200:
-                d = resp.json()
-                bonzo_info = {
-                    "protocol": "Bonzo Finance",
-                    "token": d.get("symbol", "BONZO"),
-                    "name": d.get("name", "Bonzo Finance Token"),
-                    "total_supply": d.get("total_supply", "N/A"),
-                    "source": "Hedera Mirror Node live",
-                }
+            # 1. Try Bonzo's live pool API
+            try:
+                resp = client.get("https://app.bonzo.finance/api/pools", timeout=5.0)
+                if resp.status_code == 200:
+                    bonzo = {"protocol": "Bonzo Finance", "data": resp.json(), "source": "live"}
+            except Exception:
+                pass
+
+            # 2. Fallback: Mirror Node token data if live pools fail
+            if not bonzo:
+                resp = client.get(f"{MIRROR_NODE_URL}/api/v1/tokens/0.0.1183558")
+                if resp.status_code == 200:
+                    d = resp.json()
+                    bonzo = {
+                        "protocol": "Bonzo Finance",
+                        "token": d.get("symbol", "BONZO"),
+                        "hbar_supply_apy": "~3-5% (check app.bonzo.finance for live rate)",
+                        "source": "Hedera Mirror Node token fallback",
+                    }
+
         return json.dumps({
-            "bonzo_finance": bonzo_info or {"protocol": "Bonzo Finance", "note": "Leading Hedera lending protocol"},
+            "bonzo_finance": bonzo or {"protocol": "Bonzo Finance", "note": "Leading Hedera lending protocol"},
             "saucerswap": {
                 "protocol": "SaucerSwap",
                 "note": "Hedera's leading DEX — HBAR liquidity pools with competitive yields",
