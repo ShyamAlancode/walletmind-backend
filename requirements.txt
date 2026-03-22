@@ -1,5 +1,5 @@
 groq>=0.13.0
-google-generativeai
+google-genai
 langchain>=0.3.0,<1.0.0
 langchain-groq>=0.2.0,<1.0.0
 langchain-core>=0.3.0,<1.0.0

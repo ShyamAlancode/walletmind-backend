@@ -1,6 +1,6 @@
 # agents/advisor.py
 import os, json
-import google.generativeai as genai
+from google import genai
 
 ADVISOR_PROMPT = """You are WalletMind Strategy Advisor Agent — a DeFi strategy specialist.
 You receive a structured wallet brief from Market Scout Agent (via HCS) and produce a personalized strategy.
@@ -34,13 +34,12 @@ ACTION_QUEUE:
 
 async def run_advisor(scout_brief: dict) -> str:
     """Agent 2: Reads Scout's brief (via HCS) and generates DeFi strategy."""
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        generation_config={"max_output_tokens": 2048, "temperature": 0.4}
-    )
+    client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     
     prompt_text = f"{ADVISOR_PROMPT}\n\nMarket Scout Agent brief (from HCS):\n\n{json.dumps(scout_brief, indent=2)}"
     
-    response = await gemini_model.generate_content_async(prompt_text)
+    response = await client_gemini.aio.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt_text
+    )
     return response.text

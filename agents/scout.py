@@ -1,6 +1,6 @@
 # agents/scout.py
 import os, json
-import google.generativeai as genai
+from google import genai
 
 SCOUT_PROMPT = """You are WalletMind Market Scout Agent — a data harvesting specialist.
 Your ONLY job: summarize raw wallet + market data into a compact JSON brief for the Strategy Advisor Agent.
@@ -23,15 +23,14 @@ Output STRICT JSON only, no extra text:
 
 async def run_scout(wallet_address: str, raw_data: dict) -> dict:
     """Agent 1: Digest raw Mirror Node data into a structured brief."""
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        generation_config={"max_output_tokens": 2048, "temperature": 0.1}
-    )
+    client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     
     prompt_text = f"{SCOUT_PROMPT}\n\nWallet: {wallet_address}\n\nRaw Data:\n{json.dumps(raw_data, indent=2)[:3000]}"
     
-    response = await gemini_model.generate_content_async(prompt_text)
+    response = await client_gemini.aio.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt_text
+    )
     
     # Parse JSON from response
     try:

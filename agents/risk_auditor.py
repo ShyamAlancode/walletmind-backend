@@ -1,6 +1,6 @@
 # agents/risk_auditor.py
 import os, json
-import google.generativeai as genai
+from google import genai
 
 RISK_PROMPT = """You are WalletMind Risk Auditor Agent — a completely INDEPENDENT risk analyst.
 You receive the Strategy Advisor Agent's recommendations (from HCS) and stress-test them.
@@ -33,11 +33,7 @@ FINAL_RECOMMENDATION:
 
 async def run_risk_auditor(scout_brief: dict, advisor_strategy: str) -> str:
     """Agent 3: Reads Advisor's strategy (via HCS) and independently audits risk."""
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        generation_config={"max_output_tokens": 2048, "temperature": 0.2}
-    )
+    client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     
     prompt_text = f"""{RISK_PROMPT}
 
@@ -50,5 +46,8 @@ Strategy Advisor's Recommendations (from HCS Topic B):
 Perform your independent risk audit now.
 """
     
-    response = await gemini_model.generate_content_async(prompt_text)
+    response = await client_gemini.aio.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt_text
+    )
     return response.text
